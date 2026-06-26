@@ -32,6 +32,11 @@
   h3 { font-size: 1rem; margin: 1.1em 0 .3em; }
   .lede { color: var(--muted); margin: 0 0 4px; }
   a { color: var(--accent); }
+  .intro { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--r) var(--r) 0; padding: clamp(11px, 3vw, 16px) clamp(13px, 3.5vw, 18px); margin: 14px 0 4px; }
+  .intro .hook { font-size: clamp(1rem, 4vw, 1.12rem); font-weight: 600; margin: 0 0 8px; line-height: 1.4; }
+  .intro ul { margin: 0; padding-left: 1.1em; }
+  .intro li { margin: 3px 0; }
+  .intro .go { margin: 9px 0 0; font-size: .9rem; color: var(--muted); }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: clamp(12px, 3vw, 16px); }
   .row { display: flex; flex-wrap: wrap; gap: clamp(10px, 2.5vw, 16px); }
   .controls { flex: 1 1 250px; }
@@ -85,6 +90,19 @@
     <p class="small muted">Runs entirely on your device — no server, no data leaves the page. The same
       <a href="engine.mjs">engine</a> drives this page and the <a href="tests/limiting-cases.test.mjs">tests</a>.</p>
   </header>
+
+  <section class="intro" aria-label="Introduction">
+    <p class="hook">A ball clatters down a board of pegs and almost always lands near the middle.
+      Send a single quantum particle through the <em>very same</em> lattice and it most often arrives
+      at the <em>edges</em> — far from where it started. Same board. So what changed?</p>
+    <ul>
+      <li>Can one particle really explore <strong>both</strong> paths at once?</li>
+      <li>What makes the interference vanish — being “big” and classical, or simply being <strong>watched</strong>?</li>
+      <li>Where would <em>you</em> bet the particle comes out?</li>
+    </ul>
+    <p class="go">Make a guess, then move the sliders below and see. (No maths required — the equations
+      wait until you have already seen the answer.)</p>
+  </section>
 
   <!-- ============ CONTROLS + COMBINED FIGURE ============ -->
   <section class="row" style="margin-top:12px">
