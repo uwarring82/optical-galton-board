@@ -252,6 +252,67 @@ thing to do in a teaching object about scientific honesty.
 - **Zenodo DOI / ORCID** — deferred to first tagged release per §10 (CITATION.cff
   carries `# add before DOI` markers).
 
+---
+
+## 2026-06-26 — Session 2: phase control was inert (user-caught), accumulating clicks
+
+### ! — The phase slider did nothing. The user was right, and it was physics, not wiring.
+A visitor reported "the phase control is not doing anything." It wasn't a UI bug —
+it was a **gauge triviality** I had baked into the model. The v0 phase was a
+*uniform* per-layer coin phase P_φ = diag(1, e^{iφ}). Measured directly:
+
+  max|P_φ(x) − P_0(x)| ≈ 1e-17  for every φ ∈ {0.3, 1.0, π/2, π, 2.5}
+
+i.e. machine zero. A spatially-uniform phase applied each layer is a gauge
+transformation — invisible to |ψ|². The control *could not* have changed the
+distribution. (Recorded plainly: I shipped an inert control and a learner found
+it before any test did. That is exactly the failure a teaching object must not
+hide — and why the new regression test below exists.)
+
+### C — Replace it with the position-linear "electric" phase e^{iφx}
+Compared three single-parameter candidates numerically:
+
+| phase model | max|P_φ − P_0| | verdict |
+|---|---|---|
+| uniform coin phase (old) | ~1e-17 | inert (gauge) |
+| **electric tilt e^{iφx} per layer** | **0.15 – 0.45** | chosen |
+| per-cell pseudo-random disorder ×φ | 0.04 – 0.28 | works, messier |
+
+Chose the **electric/forced quantum walk** e^{iφx}: a single global parameter
+that genuinely distorts the walk (tilts, drifts, Bloch-refocuses), is
+deterministic, applied identically in the amplitude and density paths (so the
+I_j ≡ |ψ_j|² identity still holds — confirmed, that test still passes), preserves
+Tr ρ and Hermiticity (position-diagonal blocks untouched), and is **2π-periodic**
+in φ so the slider wraps back to the clean Appendix-B walk at 2π. φ = 0 is
+unchanged, so mirror symmetry, the N=8 snapshot, and the γ=0 binomial all stand.
+
+- *Alternative not taken:* per-cell random disorder scaled by φ. It matches the
+  task card's "arbitrary per-cell φ → speckle" most literally, but needs a
+  pseudo-random pattern (less clean) and the effect is weaker. The electric phase
+  is the standard, well-studied single-parameter knob; I went with it and updated
+  the docs (`interference-and-phase.md`, `quantum-walk.md`, the advanced layer) to
+  describe a phase *gradient*, not a uniform offset, with the gauge caveat stated.
+
+### W — New regression test so the control can never silently go inert again
+`tests`: "φ is physically active (not a gauge no-op) and 2π-periodic" — asserts
+some φ moves the distribution by > 0.01, that φ = 2π returns to φ = 0, and that a
+tilt breaks mirror symmetry. **18/18 tests pass.** This is the test that should
+have existed in v0; the user's bug report is now encoded as a guard.
+
+### W — Accumulating-clicks read-out; clicks is now the default
+Reworked the trials control into a real Galton-board pile:
+- **Clicks is the default read-out** (was intensity).
+- Drop balls **+1 / +100 / +1000** (one-by-one *and* in batches) and **Reset**;
+  a running **total** is shown and kept.
+- The histogram **accumulates** into the figure (with the target distribution
+  drawn faint behind it), converging to P(x) as the total grows — verified the
+  exact UI call path in node: 1403 balls → empirical within 0.006 of target.
+- **Board caching:** the lattice/distribution is recomputed only when the board
+  (N, γ, φ) changes — dropping balls just samples and redraws, so a fast "drip"
+  stays cheap. Changing the board **resets the pile** (the old balls were drawn
+  from a different board — the honest choice; documented in the control's hint).
+- Seeded PRNG (`makeRng`) so a given sequence of drops is reproducible/shareable.
+
 ### Status vs §11 Definition of Done
 All twelve checkboxes are addressable from this tree; the only items resting on
 future *external* actions are the real Mach-1 measurements (§6 data), the README

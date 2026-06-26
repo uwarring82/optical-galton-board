@@ -64,6 +64,24 @@ test('diag(ρ) at γ=1 equals |ψ|² across phase and depth', () => {
   }
 });
 
+// --- Phase control must actually do something (regression for the gauge no-op) -
+// A *uniform* per-layer phase is a gauge transformation invisible to |ψ|². The
+// engine uses the position-linear "electric" phase e^{iφx}, which genuinely
+// distorts the walk and is 2π-periodic. This test guards against the control
+// silently going inert again.
+
+test('φ is physically active (not a gauge no-op) and 2π-periodic', () => {
+  const N = 20;
+  const base = positionMarginal(N, 1, { phi: 0 });
+  const tilted = positionMarginal(N, 1, { phi: 0.5 });
+  assert.ok(maxAbsDiff(base, tilted) > 0.01, 'phase changed nothing — the gauge no-op regressed');
+  // e^{iφx} has period 2π in φ at integer x → φ=2π must return to the clean walk
+  assert.ok(maxAbsDiff(base, positionMarginal(N, 1, { phi: 2 * Math.PI })) < 1e-9, 'not 2π-periodic');
+  // φ=0 stays mirror symmetric; a tilt breaks that symmetry (sanity on direction)
+  let asym = 0; for (let p = 0; p <= N; p++) asym = Math.max(asym, Math.abs(tilted[p] - tilted[2 * N - p]));
+  assert.ok(asym > 0.01, 'the tilt should break mirror symmetry');
+});
+
 // --- 3. Classical limit, closed form:  γ=0 ≡ C(N,k)2^−N (full distribution) --
 
 test('γ=0 density marginal equals the closed-form binomial', () => {

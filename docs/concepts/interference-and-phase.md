@@ -29,10 +29,18 @@ watched the outputs swap, because it explains a result you have already seen
 
 The fringe pattern is *entirely* set by the per-cell phases. The clean,
 symmetric walk on the front page is a property of one particular phase convention
-(Appendix B). Choose arbitrary phases and the clean structure dissolves into
-speckle. Phase is therefore not "one slider among many" — it is half of what
-generates the behaviour. Exposing it lets you break the pattern on purpose, which
-is instructive.
+(Appendix B). The `φ` control imposes a **phase gradient across the lattice**
+(physically an "electric" tilt, `e^{iφx}` per layer); turn it up and the clean
+walk tilts, drifts and refocuses — the symmetric structure is broken on purpose.
+Phase is therefore not "one slider among many" — it is half of what generates the
+behaviour.
+
+> **A subtlety worth knowing** (and one we got wrong at first, see the
+> [DEVLOG](../../DEVLOG.md)): a *uniform* phase applied equally everywhere does
+> **nothing** to the distribution — it is a gauge transformation, invisible to
+> `|ψ|²`. Only a phase that *varies across the lattice* (here, linearly with
+> position) changes what you measure. That is why the control is a gradient, not
+> a single global offset.
 
 ## Coherence controls the contrast
 

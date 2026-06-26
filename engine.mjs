@@ -62,15 +62,20 @@ function coinAmplitudes(re, im, P) {
   }
 }
 
-function phaseAmplitudes(re, im, P, phi) {
-  // Apply per-cell phase P_φ = diag(1, e^{iφ}) on the coin (down component only).
+function phaseAmplitudes(re, im, P, N, phi) {
+  // Apply the per-layer phase gradient ("electric" tilt) e^{iφx} at every
+  // position x, to both coin components. NOTE: a *uniform* phase per layer is a
+  // gauge transformation, invisible to |ψ|² (verified to machine precision — see
+  // DEVLOG 2026-06-26). The position-linear gradient is what actually distorts
+  // the clean walk. φ = 0 → identity (the Appendix-B default); e^{iφx} is
+  // 2π-periodic in φ, so φ = 2π returns to the clean walk.
   if (phi === 0) return;
-  const c = Math.cos(phi), s = Math.sin(phi);
   for (let p = 0; p < P; p++) {
-    const b = 2 * p + 1;
-    const br = re[b], bi = im[b];
-    re[b] = br * c - bi * s;
-    im[b] = br * s + bi * c;
+    const x = p - N, c = Math.cos(phi * x), s = Math.sin(phi * x);
+    for (let q = 0; q < 2; q++) {
+      const k = 2 * p + q, r = re[k], i = im[k];
+      re[k] = r * c - i * s; im[k] = r * s + i * c;
+    }
   }
 }
 
@@ -102,7 +107,7 @@ export function amplitudeWalk(N, opts = {}) {
   if (onDepth) onDepth(normOfAmplitudes(re, im), 0);
   for (let n = 1; n <= N; n++) {
     coinAmplitudes(re, im, P);
-    phaseAmplitudes(re, im, P, phi);
+    phaseAmplitudes(re, im, P, N, phi);
     const { nre, nim } = shiftAmplitudes(re, im, P);
     re = nre; im = nim;
     if (onDepth) onDepth(normOfAmplitudes(re, im), n);
@@ -174,16 +179,20 @@ function transformBlock(M, half, i00, i01, i10, i11) {
   M[i11] = half * (d0 - d1);
 }
 
-function phaseDensity(re, im, P, D, phi) {
-  // ρ → P_φ ρ P_φ†, P_φ = diag(1, e^{iφ}) on the coin. Off-diagonal-in-coin
-  // entries pick up e^{±iφ}; the down–down block is unchanged (|e^{iφ}|=1).
+function phaseDensity(re, im, P, D, N, phi) {
+  // ρ → E ρ E†, E = diag e^{iφx} (the electric tilt). Entry ((p1,·),(p2,·)) picks
+  // up e^{iφ(p1−p2)}; position-diagonal blocks (p1=p2) are untouched, so the
+  // populations are unchanged by the phase alone and Tr ρ and Hermiticity are
+  // preserved. Applied to all four coin sub-entries of the (p1,p2) block.
   if (phi === 0) return;
-  const c = Math.cos(phi), s = Math.sin(phi);
   for (let p1 = 0; p1 < P; p1++) {
     for (let p2 = 0; p2 < P; p2++) {
-      // (c1=1, c2=0): factor e^{+iφ};  (c1=0, c2=1): factor e^{−iφ}
-      mulInPlace(re, im, (2 * p1 + 1) * D + (2 * p2 + 0), c, s);
-      mulInPlace(re, im, (2 * p1 + 0) * D + (2 * p2 + 1), c, -s);
+      const d = p1 - p2; if (d === 0) continue;
+      const c = Math.cos(phi * d), s = Math.sin(phi * d);
+      mulInPlace(re, im, (2 * p1) * D + (2 * p2), c, s);
+      mulInPlace(re, im, (2 * p1) * D + (2 * p2 + 1), c, s);
+      mulInPlace(re, im, (2 * p1 + 1) * D + (2 * p2), c, s);
+      mulInPlace(re, im, (2 * p1 + 1) * D + (2 * p2 + 1), c, s);
     }
   }
 }
@@ -238,7 +247,7 @@ export function densityWalk(N, gamma, opts = {}) {
   if (onDepth) onDepth(densityTrace(re, D), 0, { re, im, D });
   for (let n = 1; n <= N; n++) {
     coinDensity(re, im, P, D);
-    phaseDensity(re, im, P, D, phi);
+    phaseDensity(re, im, P, D, N, phi);
     const { nre, nim } = shiftDensity(re, im, P, D);
     re = nre; im = nim;
     dephaseDensity(re, im, D, gamma);

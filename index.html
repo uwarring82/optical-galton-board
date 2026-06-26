@@ -71,7 +71,11 @@
   .poe .opts button.chosen { border-color: var(--accent); background: var(--accent-soft); }
   .poe .reveal { display: none; border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin-top: 8px; font-size: .9rem; }
   .poe.opened .reveal { display: block; }
+  .drops { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .drops .btn { flex: 1 1 auto; min-width: 52px; padding: 8px 6px; font-variant-numeric: tabular-nums; }
+  #dropReset { flex: 1 1 100%; color: var(--muted); }
   .btn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 6px 13px; cursor: pointer; font: inherit; }
+  .btn:active { transform: translateY(1px); }
   .btn:disabled { opacity: .45; cursor: default; }
   .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .eq { font-family: "Cambria Math", Georgia, serif; font-size: 1.1rem; text-align: center; margin: 8px 0; }
@@ -110,8 +114,8 @@
       <div class="ctl">
         <label>Read-out <span class="reading" id="readoutReading"></span></label>
         <div class="seg" role="group" aria-label="Read-out">
-          <button id="roClicks" aria-pressed="false">Clicks</button>
-          <button id="roIntensity" aria-pressed="true">Intensity</button>
+          <button id="roClicks" aria-pressed="true">Clicks</button>
+          <button id="roIntensity" aria-pressed="false">Intensity</button>
         </div>
       </div>
       <div class="ctl">
@@ -124,13 +128,19 @@
         <input type="range" id="depth" min="1" max="48" step="1" value="20" />
       </div>
       <div class="ctl">
-        <label for="phi">Phase φ <span class="val" id="phiVal"></span></label>
+        <label for="phi">Phase gradient φ <span class="val" id="phiVal"></span></label>
         <input type="range" id="phi" min="0" max="6.2832" step="0.0314" value="0" />
-        <div class="reading">0 = symmetric default; turn it up to break the clean walk on purpose.</div>
+        <div class="reading">A phase tilt e<sup>iφx</sup> across the lattice. 0 = symmetric default; turn it up to tilt and break the clean walk. (A uniform phase would do nothing — it’s gauge.)</div>
       </div>
       <div class="ctl" id="trialsCtl">
-        <label for="trials">Trials (clicks) <span class="val" id="trialsVal"></span></label>
-        <input type="range" id="trials" min="50" max="20000" step="50" value="3000" />
+        <label>Drop clicks <span class="val" id="totalVal"></span></label>
+        <div class="drops">
+          <button class="btn" id="drop1">+1</button>
+          <button class="btn" id="drop100">+100</button>
+          <button class="btn" id="drop1000">+1000</button>
+          <button class="btn" id="dropReset">Reset</button>
+        </div>
+        <div class="reading">Balls drop one (or many) at a time and pile up; the running total is kept. Changing the board (depth, coherence, phase) resets the pile.</div>
       </div>
     </div>
 
@@ -248,10 +258,12 @@
   <details class="panel">
     <summary>Amplitudes, the unitary, three coherence notions, and the non-monotonic crossover</summary>
     <h3>The unitary, once</h3>
-    <p class="small">The wave and quantum cells share one unitary U = S·P<sub>φ</sub>·H per layer (Hadamard
-      coin H, per-cell phase P<sub>φ</sub>, then the shift S), followed by the dephasing channel
-      D<sub>γ</sub>(ρ) = γρ + (1−γ)·diag(ρ) in the directed-edge (position, coin) basis. For every output
-      j in the coherent limit, I<sub>j</sub> ≡ |ψ<sub>j</sub>|² — a software invariant checked by the suite.</p>
+    <p class="small">The wave and quantum cells share one unitary U = S·E·H per layer (Hadamard coin H,
+      a phase gradient E = diag e<sup>iφx</sup> across the lattice — an “electric” tilt, φ = 0 by default —
+      then the shift S), followed by the dephasing channel D<sub>γ</sub>(ρ) = γρ + (1−γ)·diag(ρ) in the
+      directed-edge (position, coin) basis. For every output j in the coherent limit,
+      I<sub>j</sub> ≡ |ψ<sub>j</sub>|² — a software invariant checked by the suite. (A <em>uniform</em>
+      phase would be gauge — invisible to |ψ|²; only the position-dependent gradient distorts the walk.)</p>
     <h3>Three notions behind one slider</h3>
     <ul class="small">
       <li><strong>Mutual coherence</strong> between paths — what the off-diagonals of ρ carry.</li>
@@ -292,9 +304,36 @@ import {
   singleMZ, mzVisibility, makeRng, sampleCounts,
 } from './engine.mjs';
 
-const state = { gamma: 1, N: 20, phi: 0, trials: 3000, readout: 'intensity', mzphi: 1.2 };
+const SEED = 0x6a09e667;
+const state = {
+  gamma: 1, N: 20, phi: 0, readout: 'clicks', mzphi: 1.2,
+  layers: null, dist: null,        // cached board (recomputed only when N/γ/φ change)
+  counts: null, total: 0, rng: null, // accumulating clicks
+};
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+// Recompute the board (the lattice history + its output distribution) and reset
+// the click pile — the old balls were drawn from a different board.
+function computeBoard() {
+  state.layers = layerMarginals(state.N, state.gamma, { phi: state.phi });
+  state.dist = state.layers[state.N];
+  resetAccum();
+}
+function resetAccum() {
+  state.counts = new Int32Array(2 * state.N + 1);
+  state.total = 0;
+  state.rng = makeRng(SEED);
+  refreshLabels();
+}
+// Drop k balls from the current distribution and add them to the pile.
+function dropBalls(k) {
+  const add = sampleCounts(state.dist, k, state.rng);
+  for (let i = 0; i < add.length; i++) state.counts[i] += add[i];
+  state.total += k;
+  refreshLabels();
+  renderFigure();
+}
 
 function fitCanvas(cv, cssHeight) {
   const dpr = window.devicePixelRatio || 1;
@@ -355,14 +394,14 @@ function drawDist(ctx, R, { N, dist, counts, mode, color }) {
 // sharing one position axis. One density-walk computes the whole space-time
 // history; its last layer is the output distribution.
 function renderFigure() {
-  const { N, gamma, phi, readout, trials } = state;
+  const { N, gamma, readout } = state;
+  if (!state.layers) computeBoard();
+  const layers = state.layers, dist = state.dist;
   const cv = $('figure');
   const wGuess = cv.clientWidth || cv.parentElement.clientWidth;
   const H = Math.max(300, Math.min(460, wGuess * 0.9));
   const { ctx, w, h } = fitCanvas(cv, H);
   ctx.clearRect(0, 0, w, h);
-  const layers = layerMarginals(N, gamma, { phi });
-  const dist = layers[N];
   const color = gamma >= 0.5 ? css('--accent') : css('--warm');
   const padX = 14, x0 = padX, x1 = w - padX;
   const xOf = (x) => x0 + ((x + N) / (2 * Math.max(N, 1))) * (x1 - x0);
@@ -396,9 +435,9 @@ function renderFigure() {
   // divider note
   ctx.fillStyle = css('--muted'); ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('accumulates into ↓', w / 2, latBot + 13); ctx.textAlign = 'start';
-  // the distribution
+  // the distribution: accumulated clicks (bars) or the smooth intensity curve
   const opt = readout === 'clicks'
-    ? { N, dist, counts: sampleCounts(dist, trials, makeRng(424242)), mode: 'bars', color }
+    ? { N, dist, counts: state.counts, mode: 'bars', color }
     : { N, dist, mode: 'line', color };
   drawDist(ctx, { x0, x1, yTop: distTop, yBot: distBot }, opt);
   document.querySelectorAll('.latN').forEach((e) => { e.textContent = N; });
@@ -483,7 +522,7 @@ function refreshLabels() {
   $('gammaReading').textContent = `coherence |γ| = ${state.gamma.toFixed(2)} · distinguishability = ${(1 - state.gamma).toFixed(2)} · ` + (state.gamma >= 0.5 ? 'leaning quantum' : 'leaning classical');
   $('depthVal').textContent = state.N;
   $('phiVal').textContent = state.phi.toFixed(2) + ' rad';
-  $('trialsVal').textContent = state.trials.toLocaleString();
+  $('totalVal').textContent = state.total.toLocaleString() + ' total';
   $('readoutReading').textContent = state.readout === 'clicks' ? 'discrete detector clicks' : 'continuous intensity';
   $('trialsCtl').style.opacity = state.readout === 'clicks' ? 1 : 0.4;
 }
@@ -493,11 +532,15 @@ let pending = false, queued = null;
 function schedule(fn) { queued = fn; if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; const f = queued; queued = null; f(); }); }
 
 function bindRange(id, key, fn) { $(id).addEventListener('input', (e) => { state[key] = parseFloat(e.target.value); refreshLabels(); schedule(fn); }); }
-bindRange('gamma', 'gamma', () => { renderFigure(); renderMZ(); });
-bindRange('phi', 'phi', () => { renderFigure(); });
-bindRange('trials', 'trials', () => { if (state.readout === 'clicks') renderFigure(); });
-$('depth').addEventListener('input', (e) => { state.N = parseInt(e.target.value, 10); refreshLabels(); schedule(() => { renderMap(); renderFigure(); }); });
+bindRange('gamma', 'gamma', () => { computeBoard(); renderFigure(); renderMZ(); });
+bindRange('phi', 'phi', () => { computeBoard(); renderFigure(); });
+$('depth').addEventListener('input', (e) => { state.N = parseInt(e.target.value, 10); refreshLabels(); schedule(() => { computeBoard(); renderMap(); renderFigure(); }); });
 $('mzphi').addEventListener('input', (e) => { state.mzphi = parseFloat(e.target.value); schedule(renderMZ); });
+// accumulating clicks — one by one, or in batches
+$('drop1').addEventListener('click', () => dropBalls(1));
+$('drop100').addEventListener('click', () => dropBalls(100));
+$('drop1000').addEventListener('click', () => dropBalls(1000));
+$('dropReset').addEventListener('click', () => { resetAccum(); renderFigure(); });
 
 function setReadout(ro) {
   state.readout = ro;
@@ -519,7 +562,7 @@ document.querySelectorAll('.poe').forEach((card) => {
     if (card.id === 'poe-edges') setGamma(1); else animateGamma(1, 0);
   });
 });
-function setGamma(g) { state.gamma = g; $('gamma').value = g; refreshLabels(); renderFigure(); renderMZ(); }
+function setGamma(g) { state.gamma = g; $('gamma').value = g; refreshLabels(); computeBoard(); renderFigure(); renderMZ(); }
 let anim = null;
 function animateGamma(from, to) {
   if (anim) cancelAnimationFrame(anim);
@@ -529,7 +572,7 @@ function animateGamma(from, to) {
 }
 
 function renderAll() { renderMap(); renderFigure(); renderMZ(); renderCrossover(); }
-refreshLabels(); renderAll();
+refreshLabels(); computeBoard(); dropBalls(300); renderAll();
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderAll, 140); });
 document.querySelector('details.panel').addEventListener('toggle', (e) => { if (e.target.open) renderCrossover(); });
 </script>

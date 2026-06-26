@@ -8,8 +8,10 @@ Replace the classical ball with a single quantum walker carrying a two-state
 
 1. **Coin** — a Hadamard `H = (1/√2)[[1,1],[1,−1]]` mixes the two coin states
    (the balanced beam-splitter).
-2. **Phase** — an optional per-cell phase `P_φ = diag(1, e^{iφ})` (the retarder;
-   `φ = 0` by default).
+2. **Phase** — an optional phase gradient `e^{iφx}` across the lattice (an
+   "electric" tilt; `φ = 0` by default; turning it up tilts and refocuses the
+   walk). A *uniform* phase would do nothing — it is gauge; only the position
+   gradient changes `|ψ|²`.
 3. **Shift** — coin-up moves right, coin-down moves left.
 
 The walker's amplitude is spread over the lattice and the branches **recombine**
