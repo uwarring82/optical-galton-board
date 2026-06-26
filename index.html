@@ -137,6 +137,20 @@
     </div>
   </section>
 
+  <!-- ============ THE LATTICE ITSELF ============ -->
+  <h2>Inside the lattice</h2>
+  <p class="muted small">The apparatus, not just its output. Each row is one layer
+    of beam-splitters (pegs); the source enters at the top and splits left/right at
+    every node. Shading shows how likely the walker is to be at each node <em>in that
+    row</em> — the <strong>bottom row is the output distribution plotted above</strong>.
+    Drag coherence and watch the <em>same</em> lattice morph between the classical bell
+    and the quantum edge-enhanced horn.</p>
+  <div class="panel">
+    <canvas id="lattice" height="320" aria-label="The binary lattice, each node shaded by occupation"></canvas>
+    <div class="axislabels"><span>−<span class="latN"></span></span><span>position →</span><span>+<span class="latN"></span></span></div>
+    <p class="caption" id="latticeCaption"></p>
+  </div>
+
   <!-- ============ FOUR-CELL CONCEPTUAL MAP ============ -->
   <h2>The four cells — and where you are now</h2>
   <p class="muted small">Two axes, not three modes. Down a column: same physics, two
@@ -331,7 +345,7 @@
 
 <script type="module">
 import {
-  positionMarginal, classicalWalk, marginalStd,
+  positionMarginal, classicalWalk, marginalStd, layerMarginals,
   singleMZ, mzVisibility, makeRng, sampleCounts,
 } from './engine.mjs';
 
@@ -464,6 +478,53 @@ function renderHero() {
   highlightCorners();
 }
 
+// ---- lattice illustration: the apparatus, each node shaded by occupation ----
+function renderLattice() {
+  const { N, gamma, phi } = state;
+  const { ctx, w, h } = fitCanvas($('lattice'), 320);
+  ctx.clearRect(0, 0, w, h);
+  const layers = layerMarginals(N, gamma, { phi });
+  const padX = 16, padT = 14, padB = 14;
+  const halfW = (w - 2 * padX) / 2, cx = w / 2;
+  const yOf = (n) => padT + (N === 0 ? 0 : (n / N) * (h - padT - padB));
+  const xOf = (x) => cx + (x / Math.max(N, 1)) * halfW;
+  const color = gamma >= 0.5 ? css('--accent') : css('--warm');
+  // 1) faint structural mesh — the beam-splitter / peg network itself
+  ctx.strokeStyle = css('--line'); ctx.globalAlpha = 0.55; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let n = 0; n < N; n++) {
+    for (let x = -n; x <= n; x += 2) {
+      const x0 = xOf(x), y0 = yOf(n), y1 = yOf(n + 1);
+      ctx.moveTo(x0, y0); ctx.lineTo(xOf(x - 1), y1);
+      ctx.moveTo(x0, y0); ctx.lineTo(xOf(x + 1), y1);
+    }
+  }
+  ctx.stroke(); ctx.globalAlpha = 1;
+  // 2) nodes, shaded by occupation relative to the brightest node in their row
+  const rNode = Math.max(1.4, Math.min(6, (halfW / (N + 1)) * 0.9, ((h - padT - padB) / (N + 1)) * 0.5));
+  for (let n = 0; n <= N; n++) {
+    const m = layers[n];
+    let mx = 0; for (let x = -n; x <= n; x += 2) if (m[x + N] > mx) mx = m[x + N];
+    if (mx <= 0) continue;
+    for (let x = -n; x <= n; x += 2) {
+      const p = m[x + N]; if (p <= 0) continue;
+      const a = p / mx;
+      ctx.globalAlpha = 0.1 + 0.9 * a;
+      ctx.fillStyle = color;
+      const r = rNode * (0.45 + 0.55 * Math.sqrt(a));
+      ctx.beginPath(); ctx.arc(xOf(x), yOf(n), r, 0, 7); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+  // source marker at the apex
+  ctx.fillStyle = css('--ink');
+  ctx.beginPath(); ctx.arc(xOf(0), yOf(0), Math.max(2.5, rNode * 0.55), 0, 7); ctx.fill();
+  document.querySelectorAll('.latN').forEach((e) => { e.textContent = N; });
+  $('latticeCaption').innerHTML = gamma >= 0.5
+    ? `<strong>Add amplitudes.</strong> Branches recombine and interfere; probability is driven <em>outward</em> as the wavefront descends — the ballistic, edge-enhanced quantum walk. Brightest node in a row = most likely position at that layer.`
+    : `<strong>Add probabilities.</strong> Branches never recombine coherently; each row is a step of Pascal’s triangle, building the binomial bell at the bottom. Brightest node in a row = most likely position at that layer.`;
+}
+
 // ---- readings / labels ----
 function refreshLabels() {
   $('gammaVal').textContent = state.gamma.toFixed(2);
@@ -548,9 +609,9 @@ function renderCrossover() {
 function bindRange(id, key, fn) {
   $(id).addEventListener('input', (e) => { state[key] = parseFloat(e.target.value); refreshLabels(); fn(); });
 }
-bindRange('gamma', 'gamma', () => { renderHero(); renderMZ(); });
-bindRange('phi', 'phi', () => { renderHero(); });
-$('depth').addEventListener('input', (e) => { state.N = parseInt(e.target.value, 10); refreshLabels(); renderMap(); renderHero(); });
+bindRange('gamma', 'gamma', () => { renderHero(); renderLattice(); renderMZ(); });
+bindRange('phi', 'phi', () => { renderHero(); renderLattice(); });
+$('depth').addEventListener('input', (e) => { state.N = parseInt(e.target.value, 10); refreshLabels(); renderMap(); renderHero(); renderLattice(); });
 bindRange('trials', 'trials', () => { if (state.readout === 'clicks') { rngHero = makeRng(424242); renderHero(); } });
 $('mzphi').addEventListener('input', (e) => { state.mzphi = parseFloat(e.target.value); renderMZ(); });
 
@@ -582,7 +643,7 @@ document.querySelectorAll('.poe').forEach((card) => {
     else if (which === 'poe-marking') { animateGamma(1, 0); }
   });
 });
-function setGamma(g) { state.gamma = g; $('gamma').value = g; refreshLabels(); renderHero(); renderMZ(); }
+function setGamma(g) { state.gamma = g; $('gamma').value = g; refreshLabels(); renderHero(); renderLattice(); renderMZ(); }
 let anim = null;
 function animateGamma(from, to) {
   if (anim) cancelAnimationFrame(anim);
@@ -599,7 +660,7 @@ function animateGamma(from, to) {
 // (left as a manual <details>; opening it is the "explain" step)
 
 // ---- initial paint + resize ----
-function renderAll() { renderMap(); renderHero(); renderMZ(); renderCrossover(); }
+function renderAll() { renderMap(); renderHero(); renderLattice(); renderMZ(); renderCrossover(); }
 refreshLabels();
 renderAll();
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderAll, 120); });

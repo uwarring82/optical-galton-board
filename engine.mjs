@@ -283,6 +283,24 @@ export function positionMarginal(N, gamma, opts = {}) {
   return densityMarginal(densityWalk(N, gamma, opts));
 }
 
+// Per-layer position marginals: the full space-time history of the walk through
+// the lattice. Returns an array of length N+1, where entry n is the position
+// marginal P_n(x) after layer n (entry 0 is the source δ at x=0), each a
+// Float64Array of length 2N+1. Used by the UI to draw the lattice itself, with
+// every node shaded by its occupation.
+export function layerMarginals(N, gamma, opts = {}) {
+  const P = 2 * N + 1;
+  const layers = [];
+  densityWalk(N, gamma, { ...opts, onDepth: (_trace, _n, st) => {
+    const out = new Float64Array(P);
+    for (let p = 0; p < P; p++) {
+      out[p] = st.re[(2 * p) * st.D + (2 * p)] + st.re[(2 * p + 1) * st.D + (2 * p + 1)];
+    }
+    layers.push(out);
+  }});
+  return layers;
+}
+
 // ---------------------------------------------------------------------------
 // Classical engines — independent oracles for the γ = 0 limit
 // ---------------------------------------------------------------------------

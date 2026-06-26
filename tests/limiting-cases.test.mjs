@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import {
   amplitudeWalk, amplitudeMarginal,
   densityWalk, densityMarginal, densityTrace, densityHermiticityError,
-  classicalWalk, classicalBinomial,
+  classicalWalk, classicalBinomial, positionMarginal, layerMarginals,
   singleMZ, mzVisibility, marginalStd, makeRng, sampleCounts,
 } from '../engine.mjs';
 
@@ -189,6 +189,27 @@ test('crossover is non-monotonic in flatness: interior peak-height minimum', () 
   for (const g of [0.99, 0.97, 0.95, 0.93, 0.9]) pInteriorMin = Math.min(pInteriorMin, peakAt(g));
   assert.ok(pInteriorMin < 0.6 * pEnds,
     `flattening not observed: interior peak min ${pInteriorMin} vs endpoints ${pEnds}`);
+});
+
+// --- Per-layer history (drives the lattice illustration) --------------------
+
+test('layerMarginals: N+1 layers, source δ, normalised, final == positionMarginal', () => {
+  for (const gamma of [0, 0.6, 1]) {
+    const N = 18;
+    const layers = layerMarginals(N, gamma, { phi: 0.2 });
+    assert.equal(layers.length, N + 1, 'one marginal per layer incl. source');
+    // layer 0 is the source δ at x = 0 (index N)
+    assert.ok(Math.abs(layers[0][N] - 1) < 1e-12 && layers[0].reduce((a, b) => a + b, 0) - 1 < 1e-12);
+    // every layer is a normalised distribution, supported on |x| ≤ n
+    layers.forEach((m, n) => {
+      assert.ok(Math.abs(m.reduce((a, b) => a + b, 0) - 1) < 1e-12, `layer ${n} not normalised`);
+      for (let p = 0; p < m.length; p++) {
+        if (Math.abs(p - N) > n) assert.ok(m[p] === 0, `occupation outside light-cone at layer ${n}`);
+      }
+    });
+    // the last layer is exactly the depth-N output
+    assert.ok(maxAbsDiff(Array.from(layers[N]), Array.from(positionMarginal(N, gamma, { phi: 0.2 }))) < 1e-12);
+  }
 });
 
 // --- Read-out sampling is reproducible and converges ------------------------
