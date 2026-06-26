@@ -1,0 +1,15 @@
+# This project is deliberately dependency-free and has no build step.
+# Nothing here should be generated; keep the tree honest.
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# If a contributor ever adds tooling, ignore its output — but not its config.
+node_modules/
+coverage/
+*.log

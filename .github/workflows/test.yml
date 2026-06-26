@@ -1,0 +1,21 @@
+name: tests
+
+# The §5 correctness suite is non-negotiable: a physics bug in a teaching object
+# teaches something false. It runs on every push and PR. No dependencies, no
+# build step — just Node's built-in test runner against engine.mjs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  limiting-cases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run the §5 correctness tests
+        run: node --test tests/*.test.mjs

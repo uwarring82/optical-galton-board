@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Optical Galton Board</title>
+<meta name="description" content="An honest interactive model of random walk → interference → decoherence. The same engine runs the page and the tests." />
+<style>
+  :root {
+    --bg: #fbfcfe; --panel: #ffffff; --ink: #11161d; --muted: #5b6776;
+    --line: #dde3ec; --accent: #2f6df0; --accent-soft: #e8f0ff;
+    --warm: #e8743b; --good: #1f9d6b; --shadow: 0 1px 3px rgba(16,22,29,.06), 0 1px 2px rgba(16,22,29,.04);
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e131a; --panel: #161d26; --ink: #e8edf4; --muted: #9aa7b6;
+      --line: #283443; --accent: #5b8dff; --accent-soft: #1b2740;
+      --warm: #f08a52; --good: #46c08a; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 18px 80px; }
+  h1 { font-size: 1.6rem; margin: 0 0 2px; letter-spacing: -.01em; }
+  h2 { font-size: 1.2rem; margin: 2.2em 0 .5em; letter-spacing: -.01em; }
+  h3 { font-size: 1rem; margin: 1.2em 0 .3em; }
+  .lede { color: var(--muted); margin: 0 0 6px; }
+  a { color: var(--accent); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; }
+  .grow { flex: 1 1 320px; }
+  .muted { color: var(--muted); }
+  .small { font-size: .86rem; }
+  canvas { width: 100%; display: block; border-radius: 8px; }
+  /* segmented toggle */
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--bg); }
+  .seg button { border: 0; background: transparent; color: var(--muted); padding: 7px 16px; font: inherit; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  /* sliders */
+  .ctl { margin: 10px 0; }
+  .ctl label { display: flex; justify-content: space-between; font-weight: 600; font-size: .92rem; gap: 8px; }
+  .ctl .val { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; }
+  .ctl .reading { font-weight: 400; color: var(--muted); font-size: .82rem; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); margin-top: 4px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cell { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--bg); position: relative; }
+  .cell.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cell h4 { margin: 0 0 1px; font-size: .82rem; }
+  .cell .tag { font-size: .72rem; color: var(--muted); }
+  .cell canvas { height: 86px; margin-top: 4px; }
+  .axislabels { display: flex; justify-content: space-between; color: var(--muted); font-size: .74rem; margin-top: 2px; }
+  .caption { margin-top: 8px; font-size: .92rem; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: .76rem; font-weight: 600; }
+  .pill.q { background: var(--accent-soft); color: var(--accent); }
+  .pill.c { background: #f0ece6; color: var(--warm); }
+  @media (prefers-color-scheme: dark) { .pill.c { background: #2a2018; } }
+  /* predict-observe-explain */
+  .poe { margin: 10px 0; }
+  .poe .q { font-weight: 600; }
+  .poe .opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .poe .opts button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  .poe .opts button.chosen { border-color: var(--accent); background: var(--accent-soft); }
+  .poe .reveal { display: none; border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin-top: 8px; }
+  .poe.opened .reveal { display: block; }
+  .btn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 6px 14px; cursor: pointer; font: inherit; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .eq { font-family: "Cambria Math", Georgia, serif; font-size: 1.15rem; text-align: center; margin: 8px 0; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; font-weight: 600; }
+  .note { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; font-size: .9rem; }
+  .twocol { columns: 2 260px; column-gap: 24px; }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .86rem; }
+  kbd { font-family: ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: .85em; }
+  .warnbox { font-size: .82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Optical Galton Board</h1>
+    <p class="lede">Random walk → interference → decoherence, as one continuous story. Predict, then observe, then explain.</p>
+    <p class="small muted">The same numerical engine drives this page and the
+      <a href="tests/limiting-cases.test.mjs">correctness tests</a>. What you see is what is tested.</p>
+  </header>
+
+  <!-- ============ CONTROLS + HERO ============ -->
+  <section class="row" style="margin-top:14px">
+    <div class="panel grow">
+      <h3 style="margin-top:0">The two questions that decide everything</h3>
+
+      <div class="ctl">
+        <label>How do we read the output?
+          <span class="reading" id="readoutReading"></span></label>
+        <div class="seg" role="group" aria-label="Read-out">
+          <button id="roClicks" aria-pressed="false">Clicks (discrete)</button>
+          <button id="roIntensity" aria-pressed="true">Intensity (continuous)</button>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <label for="gamma">How distinguishable are the paths?
+          <span class="val" id="gammaVal"></span></label>
+        <input type="range" id="gamma" min="0" max="1" step="0.01" value="1" />
+        <div class="reading" id="gammaReading"></div>
+      </div>
+
+      <div class="ctl">
+        <label for="depth">Lattice depth (layers N)
+          <span class="val" id="depthVal"></span></label>
+        <input type="range" id="depth" min="1" max="48" step="1" value="24" />
+      </div>
+
+      <div class="ctl">
+        <label for="phi">Phase φ (the retarder; default 0)
+          <span class="val" id="phiVal"></span></label>
+        <input type="range" id="phi" min="0" max="6.2832" step="0.0314" value="0" />
+        <div class="reading">φ = 0 is the documented symmetric default. Turn it up to break the clean walk on purpose.</div>
+      </div>
+
+      <div class="ctl" id="trialsCtl">
+        <label for="trials">Trials (clicks to throw)
+          <span class="val" id="trialsVal"></span></label>
+        <input type="range" id="trials" min="50" max="20000" step="50" value="3000" />
+      </div>
+    </div>
+
+    <div class="panel grow">
+      <canvas id="hero" height="320" aria-label="Output distribution"></canvas>
+      <div class="axislabels"><span id="heroLeft"></span><span>position →</span><span id="heroRight"></span></div>
+      <p class="caption" id="heroCaption"></p>
+    </div>
+  </section>
+
+  <!-- ============ FOUR-CELL CONCEPTUAL MAP ============ -->
+  <h2>The four cells — and where you are now</h2>
+  <p class="muted small">Two axes, not three modes. Down a column: same physics, two
+    read-outs. Across a row: the coherence slider moves you between the rows. The
+    bottom two cells are computed from <em>one</em> distribution — that identity is a passing test, not a promise.</p>
+  <div class="grid4" id="map">
+    <div class="cell" id="cell-pc">
+      <span class="pill c">add probabilities</span>
+      <h4>Classical Galton board</h4>
+      <span class="tag">clicks · binomial P(k), σ ∝ √N</span>
+      <canvas height="120"></canvas>
+    </div>
+    <div class="cell" id="cell-pi">
+      <span class="pill c">add probabilities</span>
+      <h4>Incoherent light</h4>
+      <span class="tag">intensity · washed out, no fringes</span>
+      <canvas height="120"></canvas>
+    </div>
+    <div class="cell" id="cell-ac">
+      <span class="pill q">add amplitudes</span>
+      <h4>Single-particle quantum walk</h4>
+      <span class="tag">clicks · ballistic, edge-enhanced, σ ∝ N</span>
+      <canvas height="120"></canvas>
+    </div>
+    <div class="cell" id="cell-ai">
+      <span class="pill q">add amplitudes</span>
+      <h4>Coherent wave</h4>
+      <span class="tag">intensity · interference fringes</span>
+      <canvas height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- ============ PREDICT–OBSERVE–EXPLAIN ============ -->
+  <h2>Predict → observe → explain</h2>
+  <p class="muted small">Commit a guess before you look. There is no grade — the point is to notice the gap.</p>
+
+  <div class="panel poe" id="poe-edges">
+    <p class="q">Where is the walker most likely to be found, at full coherence?</p>
+    <div class="opts" data-poe="edges">
+      <button data-v="centre">At the centre</button>
+      <button data-v="edges">Near the two edges</button>
+      <button data-v="uniform">Equally everywhere</button>
+    </div>
+    <button class="btn primary" data-observe disabled>Observe</button>
+    <div class="reveal">
+      <p><strong>Near the edges.</strong> At γ = 1 the distribution has two peaks close to
+        the ballistic front ±N/√2 and a suppressed centre — the walker most likely ends up
+        <em>far</em> from where it started. This is the headline behaviour; do not bury it.</p>
+    </div>
+  </div>
+
+  <div class="panel poe" id="poe-coherence">
+    <p class="q">What happens to the pattern as the paths become distinguishable (coherence removed)?</p>
+    <div class="opts" data-poe="coherence">
+      <button data-v="same">Nothing — same shape</button>
+      <button data-v="bell">It collapses to a single bell curve</button>
+      <button data-v="shift">The fringes slide sideways</button>
+    </div>
+    <button class="btn primary" data-observe disabled>Observe (sweep coherence)</button>
+    <div class="reveal">
+      <p><strong>It collapses to the classical bell curve.</strong> Full coherence → the
+        edge-enhanced quantum walk; zero coherence → the binomial Galton board. Because γ
+        is real here, the fringes <em>wash out</em> without sliding — losing coherence, not
+        adding a phase. (A real subtlety lives in the middle; see the advanced layer.)</p>
+    </div>
+  </div>
+
+  <div class="panel poe" id="poe-marking">
+    <p class="q">If you could mark which path was taken, what happens to the fringes?</p>
+    <div class="opts" data-poe="marking">
+      <button data-v="bright">They get brighter</button>
+      <button data-v="vanish">They weaken and vanish</button>
+      <button data-v="none">No effect — marking is just bookkeeping</button>
+    </div>
+    <button class="btn primary" data-observe disabled>Observe</button>
+    <div class="reveal">
+      <p><strong>They weaken and vanish as the marking becomes complete.</strong> Marking
+        correlates the path with another degree of freedom; the more distinguishable the
+        paths, the less path-coherence is available to interfere. Note the honest wording:
+        “more distinguishable → weaker fringes,” <em>not</em> “which-path information <em>is</em>
+        decoherence.” See <a href="docs/concepts/limits-of-the-analogy.md">limits of the analogy</a>.</p>
+    </div>
+  </div>
+
+  <!-- ============ SINGLE MACH–ZEHNDER ============ -->
+  <h2>One cell, close up: a Mach–Zehnder</h2>
+  <div class="row">
+    <div class="panel grow">
+      <p class="small muted">A single beam-splitter → phase → beam-splitter. Sweep the
+        phase and watch the two outputs trade intensity. The slider below reuses the
+        <em>same</em> coherence γ as the main display, so you can see visibility fall with it.</p>
+      <div class="ctl">
+        <label for="mzphi">Phase φ <span class="val" id="mzphiVal"></span></label>
+        <input type="range" id="mzphi" min="0" max="6.2832" step="0.0157" value="1.2" />
+      </div>
+      <p class="small">Output now: <span id="mzOut" style="font-variant-numeric:tabular-nums"></span> ·
+        fringe visibility V = <span id="mzVis" style="font-weight:700"></span> (= γ)</p>
+      <details id="mzExplain">
+        <summary>Explain (after you have watched the outputs swap)</summary>
+        <p class="small">For one balanced interferometer the output intensities are</p>
+        <p class="eq">I<sub>±</sub> = ½ (1 ± γ cos φ)</p>
+        <p class="small muted">At γ = 1 this is the textbook ½(1 ± cos φ): perfect fringes.
+          As γ → 0 the cos term is suppressed and both ports sit at ½ — no fringes. The
+          first equation we show explains a result you have already seen.</p>
+      </details>
+    </div>
+    <div class="panel grow">
+      <canvas id="mz" height="240" aria-label="Mach-Zehnder output vs phase"></canvas>
+      <div class="axislabels"><span>φ = 0</span><span>phase φ →</span><span>2π</span></div>
+    </div>
+  </div>
+
+  <!-- ============ WHAT THIS DOES / DOES NOT SHOW ============ -->
+  <h2>What this does — and does not — show</h2>
+  <div class="panel">
+    <div class="twocol small">
+      <p><strong>It shows</strong> that the same lattice produces a classical bell curve or
+        an edge-enhanced quantum walk depending on <em>one</em> thing: whether the alternative
+        paths stay coherent. The read-out (clicks vs intensity) is just rendering.</p>
+      <p><strong>What destroys the fringes is incoherence, not “classicality.”</strong> A lone
+        photon still interferes with itself — that is the coherent-wave vs incoherent-light
+        contrast, carried by the two right-hand cells, not parked in a footnote.</p>
+      <p><strong>The quantum-to-classical reading is qualified.</strong> “Full coherence =
+        quantum walk; zero coherence = Galton board” holds for the <em>specific per-layer
+        dephasing channel</em> used here (Appendix A): coherence is removed in the directed-edge
+        basis after every layer. Dephasing only at the final read-out, or in a different basis,
+        need not give the same limit.</p>
+      <p><strong>γ is kept real in v0.</strong> The slider washes fringes out without shifting
+        them, deliberately separating loss of coherence from an added phase. Complex γ
+        (magnitude → visibility, phase → shift) is a documented future extension, not a hidden
+        simplification.</p>
+    </div>
+    <p class="small">Full treatment:
+      <a href="docs/concepts/random-walk.md">random walk</a> ·
+      <a href="docs/concepts/interference-and-phase.md">interference &amp; phase</a> ·
+      <a href="docs/concepts/quantum-walk.md">quantum walk</a> ·
+      <a href="docs/concepts/limits-of-the-analogy.md">limits of the analogy</a> ·
+      <a href="docs/design-challenge.md">build-an-analogy challenge</a>.</p>
+  </div>
+
+  <!-- ============ ADVANCED LAYER ============ -->
+  <h2>For the undergraduate layer</h2>
+  <details class="panel">
+    <summary>Amplitudes, the unitary, three coherence notions, and the non-monotonic crossover</summary>
+
+    <h3>The unitary, once</h3>
+    <p class="small">The wave and quantum cells share one unitary U = S·P<sub>φ</sub>·H per
+      layer (Hadamard coin H, per-cell phase P<sub>φ</sub>, then the shift S), followed by the
+      dephasing channel D<sub>γ</sub>(ρ) = γρ + (1−γ)·diag(ρ) in the directed-edge (position,
+      coin) basis. For every output j in the coherent limit, I<sub>j</sub> ≡ |ψ<sub>j</sub>|² —
+      a software invariant checked by the suite, not a sentence.</p>
+
+    <h3>Three notions behind one slider</h3>
+    <ul class="small">
+      <li><strong>Mutual coherence</strong> between paths — what the off-diagonals of ρ carry.</li>
+      <li><strong>Which-path distinguishability</strong> in an auxiliary degree of freedom.</li>
+      <li><strong>Dephasing noise</strong> from uncontrolled phase fluctuations.</li>
+    </ul>
+    <p class="small muted">All three reduce interference, but they are <em>not</em> operationally
+      identical in a real experiment. v0 exposes one real-γ slider; separating reversible marker
+      entanglement from irreversible ensemble phase noise is deferred.</p>
+
+    <h3>The non-monotonic crossover (the honest middle)</h3>
+    <p class="small">Coming down from γ = 1, a little dephasing first <em>flattens</em> the horn
+      toward a broad, near-uniform profile before strong dephasing gives the diffusive Gaussian:
+      <strong>horn → flattened → binomial</strong>, not a smooth morph. The standard deviation σ
+      is a poor way to see this (it falls monotonically); the right diagnostic is the
+      <em>peak height</em>, plotted below — it dips to a minimum at intermediate γ.</p>
+    <canvas id="crossover" height="200" aria-label="Peak height vs coherence"></canvas>
+    <div class="axislabels"><span>γ = 0 (classical)</span><span>coherence γ →</span><span>γ = 1 (quantum)</span></div>
+    <p class="small muted" id="crossoverNote"></p>
+
+    <h3>Conventions, pinned</h3>
+    <p class="small">Coin: Hadamard. Initial coin state: (|↑⟩ + i|↓⟩)/√2. We verified
+      numerically that this gives a mirror-symmetric P(x) — and, in fact, that the ∓i sign
+      gives the <em>identical</em> distribution (the states are complex conjugates and the
+      evolution is real), so the literature’s sign ambiguity is invisible to the read-out in
+      v0. Single-port input |↑⟩ instead reproduces the drifting Hadamard profile — offered as a
+      contrast, never the default.</p>
+  </details>
+
+  <footer>
+    <p>MIT licensed · cite via <a href="CITATION.cff">CITATION.cff</a> ·
+      decisions &amp; rejected routes in the <a href="DEVLOG.md">development log</a> ·
+      scope in the <a href="optical-galton-board-taskcard-v0.3.md">task card</a> ·
+      bench bridge: <a href="docs/build/mach-1.md">Mach-1</a>.</p>
+    <p class="warnbox">Runs entirely in your browser, no data leaves the page. Because
+      <kbd>index.html</kbd> imports an ES module, open it through a local server
+      (<kbd>python3 -m http.server</kbd>) rather than a <kbd>file://</kbd> path.</p>
+  </footer>
+</main>
+
+<script type="module">
+import {
+  positionMarginal, classicalWalk, marginalStd,
+  singleMZ, mzVisibility, makeRng, sampleCounts,
+} from './engine.mjs';
+
+// ---- state ----
+const state = { gamma: 1, N: 24, phi: 0, trials: 3000, readout: 'intensity' };
+const $ = (id) => document.getElementById(id);
+
+// ---- canvas plotting helper ----
+function fitCanvas(cv, cssHeight) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || cv.parentElement.clientWidth;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(cssHeight * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h: cssHeight };
+}
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+// Draw a distribution over positions x=-N..N. mode: 'line' | 'bars'.
+// `counts` (optional) overlays an empirical histogram as bars while the smooth
+// distribution is drawn faintly behind it.
+function plotDist(cv, cssH, { N, dist, counts, mode, color, pad = 10 }) {
+  const { ctx, w, h } = fitCanvas(cv, cssH);
+  ctx.clearRect(0, 0, w, h);
+  const n = dist.length;
+  let max = 0;
+  for (let i = 0; i < n; i++) if (dist[i] > max) max = dist[i];
+  if (counts) { let cm = 0, tot = 0; for (const c of counts) { tot += c; } for (const c of counts) cm = Math.max(cm, c / (tot || 1)); max = Math.max(max, cm); }
+  max = max || 1;
+  const x0 = pad, x1 = w - pad, y0 = h - pad, y1 = pad;
+  const X = (i) => x0 + (i / (n - 1)) * (x1 - x0);
+  const Y = (p) => y0 + (p / max) * (y1 - y0);
+  // baseline
+  ctx.strokeStyle = css('--line'); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+  // smooth distribution
+  const drawLine = (faint) => {
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      if (dist[i] === 0 && (i % 2) !== (N % 2)) continue; // skip wrong-parity gaps
+      const px = X(i), py = Y(dist[i]);
+      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = color; ctx.globalAlpha = faint ? 0.32 : 1; ctx.lineWidth = faint ? 1.5 : 2.2;
+    ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  if (mode === 'line') {
+    // filled area
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      if (dist[i] === 0 && (i % 2) !== (N % 2)) continue;
+      const px = X(i), py = Y(dist[i]);
+      if (!started) { ctx.moveTo(px, y0); ctx.lineTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.lineTo(X(n - 1), y0); ctx.closePath();
+    ctx.fillStyle = color; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+    drawLine(false);
+  } else { // bars (clicks)
+    drawLine(true); // true distribution behind
+    if (counts) {
+      let tot = 0; for (const c of counts) tot += c;
+      const bw = Math.max(1.5, (x1 - x0) / n * 0.7);
+      ctx.fillStyle = color;
+      for (let i = 0; i < n; i++) {
+        if (counts[i] === 0) continue;
+        const py = Y(counts[i] / (tot || 1));
+        ctx.fillRect(X(i) - bw / 2, py, bw, y0 - py);
+      }
+    }
+  }
+}
+
+// ---- the four corner distributions (depend on N, φ=0 canonical) ----
+let rngMap = makeRng(20260626);
+function renderMap() {
+  const N = state.N;
+  const qDist = positionMarginal(N, 1, { phi: 0 });   // coherent corner
+  const cDist = classicalWalk(N);                      // incoherent corner
+  const t = 2500;
+  const cells = {
+    'cell-pc': { dist: cDist, counts: sampleCounts(cDist, t, makeRng(1)), mode: 'bars', color: css('--warm') },
+    'cell-pi': { dist: cDist, mode: 'line', color: css('--warm') },
+    'cell-ac': { dist: qDist, counts: sampleCounts(qDist, t, makeRng(2)), mode: 'bars', color: css('--accent') },
+    'cell-ai': { dist: qDist, mode: 'line', color: css('--accent') },
+  };
+  for (const [id, opt] of Object.entries(cells)) {
+    const cv = $(id).querySelector('canvas');
+    plotDist(cv, 86, { N, ...opt });
+  }
+}
+
+// ---- highlight the active corner(s) ----
+function highlightCorners() {
+  const isQ = state.gamma >= 0.5;
+  const ro = state.readout;
+  const active = (isQ ? 'a' : 'p') + (ro === 'clicks' ? 'c' : 'i');
+  for (const id of ['pc', 'pi', 'ac', 'ai']) {
+    $('cell-' + id).classList.toggle('active', id === active);
+  }
+}
+
+// ---- hero render ----
+let rngHero = makeRng(424242);
+function renderHero() {
+  const { N, gamma, phi, readout, trials } = state;
+  const dist = positionMarginal(N, gamma, { phi });
+  const color = gamma >= 0.5 ? css('--accent') : css('--warm');
+  const opt = readout === 'clicks'
+    ? { N, dist, counts: sampleCounts(dist, trials, rngHero), mode: 'bars', color }
+    : { N, dist, mode: 'line', color };
+  plotDist($('hero'), 320, opt);
+  $('heroLeft').textContent = '−' + N;
+  $('heroRight').textContent = '+' + N;
+  // caption: name the regime honestly
+  const sigma = marginalStd(dist, N);
+  let peak = 0, ip = 0; for (let i = 0; i < dist.length; i++) if (dist[i] > peak) { peak = dist[i]; ip = i; }
+  const xPeak = ip - N;
+  let regime;
+  if (gamma > 0.9) regime = `Edge-enhanced ballistic walk: σ ≈ ${sigma.toFixed(1)} ≈ ${(sigma / N).toFixed(2)}·N, twin peaks near x = ±${Math.abs(xPeak)}. The walker is most likely far from the centre.`;
+  else if (gamma > 0.55) regime = `Coherence partly lost: the horn is flattening toward a broad profile (the honest non-monotonic middle — see the advanced layer).`;
+  else if (gamma > 0.15) regime = `Mostly incoherent: interference nearly gone, the distribution is collapsing toward the classical bell curve.`;
+  else regime = `Classical Galton board: binomial bell curve, σ ≈ ${sigma.toFixed(1)} ≈ √N, peak at the centre. No interference survives.`;
+  const rendering = readout === 'clicks'
+    ? ` Rendered as ${trials.toLocaleString()} discrete clicks sampled from this distribution.`
+    : ` Rendered as continuous intensity.`;
+  $('heroCaption').innerHTML = `<strong>${gamma >= 0.5 ? 'Add amplitudes' : 'Add probabilities'}.</strong> ` + regime + rendering;
+  highlightCorners();
+}
+
+// ---- readings / labels ----
+function refreshLabels() {
+  $('gammaVal').textContent = state.gamma.toFixed(2);
+  const dist = (1 - state.gamma);
+  $('gammaReading').textContent =
+    `coherence |γ| = ${state.gamma.toFixed(2)}  ·  distinguishability = ${dist.toFixed(2)}  ·  `
+    + (state.gamma >= 0.5 ? 'leaning quantum (add amplitudes)' : 'leaning classical (add probabilities)');
+  $('depthVal').textContent = state.N;
+  $('phiVal').textContent = state.phi.toFixed(2) + ' rad';
+  $('trialsVal').textContent = state.trials.toLocaleString();
+  $('readoutReading').textContent = state.readout === 'clicks'
+    ? 'discrete detector clicks' : 'a continuous intensity curve';
+  $('trialsCtl').style.opacity = state.readout === 'clicks' ? 1 : 0.4;
+}
+
+// ---- single MZ panel ----
+function renderMZ() {
+  const cv = $('mz');
+  const { ctx, w, h } = fitCanvas(cv, 240);
+  ctx.clearRect(0, 0, w, h);
+  const pad = 26, x0 = pad, x1 = w - pad, y0 = h - pad, y1 = pad;
+  const X = (phi) => x0 + (phi / (2 * Math.PI)) * (x1 - x0);
+  const Y = (I) => y0 + I * (y1 - y0); // I in [0,1]
+  // gridlines for I = 0, .5, 1
+  ctx.strokeStyle = css('--line'); ctx.lineWidth = 1; ctx.fillStyle = css('--muted'); ctx.font = '11px sans-serif';
+  for (const I of [0, 0.5, 1]) { ctx.beginPath(); ctx.moveTo(x0, Y(I)); ctx.lineTo(x1, Y(I)); ctx.stroke(); ctx.fillText('I=' + I, 2, Y(I) + 3); }
+  const g = state.gamma;
+  const sweep = (port) => {
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const phi = (2 * Math.PI * i) / 200;
+      const I = singleMZ(phi, g)[port];
+      const px = X(phi), py = Y(I);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  };
+  ctx.lineWidth = 2.2; ctx.strokeStyle = css('--accent'); sweep('Iplus');
+  ctx.strokeStyle = css('--warm'); sweep('Iminus');
+  // current phi marker
+  const phi = state.mzphi;
+  const o = singleMZ(phi, g);
+  ctx.strokeStyle = css('--muted'); ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(X(phi), y1); ctx.lineTo(X(phi), y0); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = css('--accent'); ctx.beginPath(); ctx.arc(X(phi), Y(o.Iplus), 4, 0, 7); ctx.fill();
+  ctx.fillStyle = css('--warm'); ctx.beginPath(); ctx.arc(X(phi), Y(o.Iminus), 4, 0, 7); ctx.fill();
+  $('mzphiVal').textContent = phi.toFixed(2) + ' rad';
+  $('mzOut').innerHTML = `I<sub>+</sub> = ${o.Iplus.toFixed(3)}, I<sub>−</sub> = ${o.Iminus.toFixed(3)}`;
+  $('mzVis').textContent = mzVisibility(g).toFixed(2);
+}
+state.mzphi = 1.2;
+
+// ---- advanced: peak height vs gamma ----
+function renderCrossover() {
+  const cv = $('crossover'); if (!cv) return;
+  const { ctx, w, h } = fitCanvas(cv, 200);
+  ctx.clearRect(0, 0, w, h);
+  const N = 60, pad = 26, x0 = pad, x1 = w - pad, y0 = h - pad, y1 = pad;
+  const pts = [];
+  let maxPeak = 0, minPeak = Infinity, argmin = 1;
+  for (let i = 0; i <= 50; i++) {
+    const g = i / 50;
+    const dist = positionMarginal(N, g, { phi: 0 });
+    let pk = 0; for (const v of dist) if (v > pk) pk = v;
+    pts.push([g, pk]); maxPeak = Math.max(maxPeak, pk);
+    if (pk < minPeak) { minPeak = pk; argmin = g; }
+  }
+  const X = (g) => x0 + g * (x1 - x0);
+  const Y = (p) => y0 + (p / maxPeak) * (y1 - y0);
+  ctx.strokeStyle = css('--line'); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+  ctx.beginPath();
+  pts.forEach(([g, p], i) => { const px = X(g), py = Y(p); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+  ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.2; ctx.stroke();
+  // mark the interior minimum (flattest)
+  ctx.fillStyle = css('--good');
+  ctx.beginPath(); ctx.arc(X(argmin), Y(minPeak), 5, 0, 7); ctx.fill();
+  $('crossoverNote').textContent =
+    `N = 60. Peak height is lowest — the distribution is flattest, nearest uniform — at γ ≈ ${argmin.toFixed(2)}, not at either endpoint. That dip is the “flattened” stage.`;
+}
+
+// ---- wire controls ----
+function bindRange(id, key, fn) {
+  $(id).addEventListener('input', (e) => { state[key] = parseFloat(e.target.value); refreshLabels(); fn(); });
+}
+bindRange('gamma', 'gamma', () => { renderHero(); renderMZ(); });
+bindRange('phi', 'phi', () => { renderHero(); });
+$('depth').addEventListener('input', (e) => { state.N = parseInt(e.target.value, 10); refreshLabels(); renderMap(); renderHero(); });
+bindRange('trials', 'trials', () => { if (state.readout === 'clicks') { rngHero = makeRng(424242); renderHero(); } });
+$('mzphi').addEventListener('input', (e) => { state.mzphi = parseFloat(e.target.value); renderMZ(); });
+
+function setReadout(ro) {
+  state.readout = ro;
+  $('roClicks').setAttribute('aria-pressed', ro === 'clicks');
+  $('roIntensity').setAttribute('aria-pressed', ro === 'intensity');
+  refreshLabels(); renderHero();
+}
+$('roClicks').addEventListener('click', () => setReadout('clicks'));
+$('roIntensity').addEventListener('click', () => setReadout('intensity'));
+
+// ---- predict-observe-explain wiring ----
+document.querySelectorAll('.poe').forEach((card) => {
+  const opts = card.querySelector('.opts');
+  const observe = card.querySelector('[data-observe]');
+  opts.querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', () => {
+      opts.querySelectorAll('button').forEach((x) => x.classList.remove('chosen'));
+      b.classList.add('chosen');
+      observe.disabled = false;
+    });
+  });
+  observe.addEventListener('click', () => {
+    card.classList.add('opened');
+    const which = card.id;
+    if (which === 'poe-edges') { setGamma(1); }
+    else if (which === 'poe-coherence') { animateGamma(1, 0); }
+    else if (which === 'poe-marking') { animateGamma(1, 0); }
+  });
+});
+function setGamma(g) { state.gamma = g; $('gamma').value = g; refreshLabels(); renderHero(); renderMZ(); }
+let anim = null;
+function animateGamma(from, to) {
+  if (anim) cancelAnimationFrame(anim);
+  const steps = 60; let i = 0;
+  const tick = () => {
+    const g = from + (to - from) * (i / steps);
+    setGamma(Math.round(g * 100) / 100);
+    if (i++ < steps) anim = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+// ---- mz explain reveal nudge ----
+// (left as a manual <details>; opening it is the "explain" step)
+
+// ---- initial paint + resize ----
+function renderAll() { renderMap(); renderHero(); renderMZ(); renderCrossover(); }
+refreshLabels();
+renderAll();
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderAll, 120); });
+// re-render the crossover when the advanced details first opens (canvas needs layout)
+document.querySelector('details.panel').addEventListener('toggle', (e) => { if (e.target.open) renderCrossover(); });
+</script>
+</body>
+</html>

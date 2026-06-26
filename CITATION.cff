@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this teaching object, please cite it as below."
+title: "Optical Galton Board — an honest interactive model of random walk → interference → decoherence"
+abstract: >-
+  A dependency-free, browser-based teaching object that lets learners move
+  between four physical regimes — classical Galton board, incoherent light,
+  single-particle quantum walk, and coherent wave interference — organised by
+  two controls: the combination rule (add probabilities vs. add amplitudes) and
+  the read-out (discrete clicks vs. continuous intensity). A single coherence
+  slider interpolates between the fully coherent Hadamard quantum walk and the
+  classical binomial limit via a per-layer dephasing channel. Built for the
+  Schülerlabor co-learning programme and anchored to the Mach-1 bench
+  demonstrator.
+type: software
+authors:
+  - family-names: Warring
+    given-names: Ulrich
+    email: u.j.warring@gmail.com
+    # orcid: "https://orcid.org/0000-0000-0000-0000"  # add before first DOI release
+keywords:
+  - quantum walk
+  - Galton board
+  - decoherence
+  - interference
+  - physics education
+  - outreach
+  - Mach-Zehnder
+license: MIT
+version: "0.0.0"
+date-released: "2026-06-26"
+# A Zenodo DOI is minted on the first tagged release (see §10 of the task card);
+# add the `doi:` and `identifiers:` fields here at that point.
